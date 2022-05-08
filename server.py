@@ -25,8 +25,21 @@ def check_login():
 @auth.login_required()
 def save_file():
 
+    filename = request.args.get('title')
+    collection = request.args.get('collection')
     memo = request.files['file']
-    memo.save(os.getcwd() + '/' + memo.filename)
+
+    save_filename = collection + '_' + filename
+    memo.save(os.getcwd() + '/audios/' + save_filename)
+
+    save_col = database[collection]
+
+    file = {'filename': filename,
+            'save_name': save_filename}
+
+    save_col.insert_one(file)
+
+    return Response(response='Uploaded!\n', status=201, mimetype='text')
 
 
 @app.route('/download')
@@ -57,4 +70,6 @@ def auth_error():
 
 
 if __name__ == '__main__':
-    app.run('0.0.0.0', port=19720)
+    if not os.path.exists(os.getcwd() + '/audios'):
+        os.mkdir(os.getcwd() + '/audios')
+    app.run('0.0.0.0', port=19720, debug=True)

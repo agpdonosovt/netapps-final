@@ -9,11 +9,11 @@ import sys
 import pyaudio
 import wave
 import requests
-import multiprocessing
+import os
 
 CHUNK = 1024
 FORMAT = pyaudio.paInt16
-CHANNELS = 2
+CHANNELS = 1
 RATE = 44100
 
 
@@ -154,6 +154,11 @@ class RecordWindow(QMainWindow):
         self.collection.setFont(font)
         self.collection.setGeometry(150, 440, 300, 25)
 
+        self.duration = QLineEdit(self)
+        self.duration.setPlaceholderText('Time - Maximum of 60 seconds')
+        self.duration.setFont(font)
+        self.duration.setGeometry(150, 480, 300, 25)
+
         self.pixmap = QPixmap('logo.png')
         self.img_label = QLabel(self)
         self.img_label.setPixmap(self.pixmap)
@@ -162,39 +167,93 @@ class RecordWindow(QMainWindow):
         self.submit_btn = QPushButton(self)
         self.submit_btn.setText('Record')
         self.submit_btn.setFont(font)
-        self.submit_btn.setGeometry(225, 475, 150, 30)
+        self.submit_btn.setGeometry(225, 515, 150, 30)
         self.submit_btn.clicked.connect(self.rec_click)
         self.submit_btn.setFocusPolicy(Qt.NoFocus)
 
+        self.help_btn = QPushButton(self)
+        self.help_btn.setText('Help')
+        self.help_btn.setFont(font)
+        self.help_btn.setGeometry(15, 560, 80, 30)
+        self.help_btn.clicked.connect(self.help)
+        self.help_btn.setFocusPolicy(Qt.NoFocus)
+
     def rec_click(self):
 
-        if self.audio_title.text() and self.collection.text():
-            self.submit_btn.setText('Stop')
-            self.record_audio()
-        else:
-            button = QMessageBox.information(self, 'Audio Info', 'Enter a title and a collection to save audio.')
-
-    def record_audio(self):
         title = self.audio_title.text()
         collection = self.collection.text()
+        secs = self.duration.text()
 
-        audioplayer = AudioRec()
-        title = self.audio_title.text()
-        self.submit_btn.clicked.connect(audioplayer.stop(title))
+        if secs.isnumeric() and title and collection and 0 < int(secs) <= 60:
+            self.record_audio()
+        else:
+            button = QMessageBox.information(self, 'Audio Info', 'Enter a title and a collection to save audio.\n'
+                                                                 'Make sure to enter an integer duration for seconds.')
 
-        rec_process = multiprocessing.Process(target=audioplayer.record())
-        rec_process.start()
+    def record_audio(self):
 
-        # params = {'title': title, 'collection': collection}
-        # post = requests.post('http://0.0.0.0:19720/upload', params=params,
-        #                      auth=HTTPBasicAuth(souvenir.username,
-        #                                         souvenir.password))
+        self.p = pyaudio.PyAudio()
 
+        title = self.audio_title.text() + '.wav'
+        collection = self.collection.text()
+        secs = int(self.duration.text())
+
+        self.record(title, secs)
+
+        self.submit_btn.setText('Stopped')
+
+        files = {'file': open(os.getcwd() + '/temp/' + title, 'rb')}
+        url = 'http://0.0.0.0:19720/upload?title=' + title + '&collection=' + collection
+        post = requests.post(url, auth=HTTPBasicAuth(souvenir.username, souvenir.password),
+                             files=files)
+
+        if post.status_code == 201:
+            button = QMessageBox.information(self, 'Success', 'Uploaded audio to server!')
+        else:
+            button = QMessageBox.warning(self, 'Failure', 'Could not upload file to server.')
+
+        self.audio_title.clear()
+        self.collection.clear()
+        self.duration.clear()
         self.submit_btn.setText('Record')
-        button = QMessageBox.information(self, 'Audio Uploaded!', 'Title: ', title, '\n',
-                                         'Collection: ', collection)
+        os.remove(os.getcwd() + '/temp/' + title)
+        self.return_to_choice()
 
-        button.clicked.connect(self.return_to_choice)
+    def record(self, file, secs):
+
+        dur = secs
+
+        self.stream = self.p.open(format=FORMAT, channels=CHANNELS,
+                                  rate=RATE, input=True, frames_per_buffer=CHUNK)
+        self.frames = []
+
+        for i in range(0, int(RATE / CHUNK * secs)):
+            data = self.stream.read(CHUNK)
+            self.frames.append(data)
+
+        sample_width = self.p.get_sample_size(FORMAT)
+        self.stream.stop_stream()
+        self.stream.close()
+        self.p.terminate()
+
+        path = os.getcwd() + '/temp/' + file
+        wf = wave.open(path, 'wb')
+        wf.setnchannels(CHANNELS)
+        wf.setsampwidth(sample_width)
+        wf.setframerate(RATE)
+        wf.writeframes(b''.join(self.frames))
+        wf.close()
+
+    def help(self):
+        button = QMessageBox.information(self, 'Audio Info',
+                                         'Enter an audio title, collection, and duration.' +
+                                         'Then, press record, and begin speaking. The wheel will spin ' +
+                                         'for the duration of the recording, and when it stops spinning, ' +
+                                         'the recording is done.')
+
+    def check_button(self, audio, audio_proc):
+        while not self.submit_btn.isChecked() or not audio_proc.is_alive():
+            audio.stop(self.audio_title.text())
 
     def return_to_choice(self):
         souvenir.setCurrentWidget(choice)
@@ -217,38 +276,55 @@ class PlayWindow(QMainWindow):
 
         font = QFont("Helvetica", 15)
 
+        self.audio_title = QLineEdit(self)
+        self.audio_title.setPlaceholderText('Audio Title')
+        self.audio_title.setFont(font)
+        self.audio_title.setGeometry(150, 400, 300, 25)
 
-class AudioRec:
-    def __init__(self):
-        self.p = pyaudio.PyAudio()
+        self.collection = QLineEdit(self)
+        self.collection.setPlaceholderText('Collection')
+        self.collection.setFont(font)
+        self.collection.setGeometry(150, 440, 300, 25)
 
-        self.stream = self.p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
+        self.pixmap = QPixmap('logo.png')
+        self.img_label = QLabel(self)
+        self.img_label.setPixmap(self.pixmap)
+        self.img_label.setGeometry(50, 80, 500, 300)
 
-        self.frames = []
+        self.submit_btn = QPushButton(self)
+        self.submit_btn.setText('Play')
+        self.submit_btn.setFont(font)
+        self.submit_btn.setGeometry(225, 475, 150, 30)
+        #self.submit_btn.clicked.connect(self.find_audio())
+        self.submit_btn.setFocusPolicy(Qt.NoFocus)
 
-    def record(self):
+        self.help_btn = QPushButton(self)
+        self.help_btn.setText('Help')
+        self.help_btn.setFont(font)
+        self.help_btn.setGeometry(15, 560, 80, 30)
+        self.help_btn.clicked.connect(self.help)
+        self.help_btn.setFocusPolicy(Qt.NoFocus)
 
-        while True:
-            data = self.stream.read(CHUNK)
-            self.frames.append(data)
+    def find_audio(self):
+        title = self.audio_title.text()
+        collection = self.collection.text()
 
-    def stop(self, filename):
+        url = 'http://0.0.0.0:19720/download?title=' + title + '&collection=' + collection
 
-        sample_width = self.p.get_sample_size(FORMAT)
-        self.stream.stop_stream()
-        self.stream.close()
-        self.p.terminate()
 
-        wf = wave.open(filename, 'wb')
-        wf.setnchannels(CHANNELS)
-        wf.setsampwidth(sample_width)
-        wf.setframerate(RATE)
-        wf.writeframes(b''.join(self.frames))
-        wf.close()
+    def help(self):
+        button = QMessageBox.information(self, 'Audio Info',
+                                         'Enter an audio title and collection to search.' +
+                                         'Then, press play, and if the audio is found, the audio ' +
+                                         'will begin playing.')
 
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
+
+    if not os.path.exists(os.getcwd() + '/temp'):
+        os.mkdir(os.getcwd() + '/temp')
+
     app = QApplication(sys.argv)
     souvenir = QStackedWidget()
     souvenir.setFocusPolicy(Qt.NoFocus)
