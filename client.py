@@ -15,6 +15,10 @@ CHUNK = 1024
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 44100
+IP = '0.0.0.0'
+PORT = '19720'
+souvenir_user = ''
+souvenir_passwd = ''
 
 
 class LoginWindow(QMainWindow):
@@ -58,14 +62,16 @@ class LoginWindow(QMainWindow):
 
     def check_pass(self):
 
-        url = 'http://0.0.0.0:19720/login'  # change ip to raspberrypi
+        url = 'http://' + IP + ':' + PORT + '/login'  # change ip to raspberrypi
 
         try:
             login_request = requests.get(url, auth=HTTPBasicAuth(self.user_label.text(),
                                                                  self.pass_label.text()))
 
-            souvenir.username = self.user_label.text()
-            souvenir.password = self.pass_label.text()
+            global souvenir_user
+            global souvenir_passwd
+            souvenir_user = self.user_label.text()
+            souvenir_passwd = self.pass_label.text()
 
             if login_request.status_code != 200:
                 button = QMessageBox.warning(self, 'Invalid Login', 'Invalid login. '
@@ -178,6 +184,13 @@ class RecordWindow(QMainWindow):
         self.help_btn.clicked.connect(self.help)
         self.help_btn.setFocusPolicy(Qt.NoFocus)
 
+        self.back_btn = QPushButton(self)
+        self.back_btn.setText('Back')
+        self.back_btn.setFont(font)
+        self.back_btn.setGeometry(15, 520, 80, 30)
+        self.back_btn.clicked.connect(self.back)
+        self.back_btn.setFocusPolicy(Qt.NoFocus)
+
     def rec_click(self):
 
         title = self.audio_title.text()
@@ -203,8 +216,8 @@ class RecordWindow(QMainWindow):
         self.submit_btn.setText('Stopped')
 
         files = {'file': open(os.getcwd() + '/temp/' + title, 'rb')}
-        url = 'http://0.0.0.0:19720/upload?title=' + title + '&collection=' + collection
-        post = requests.post(url, auth=HTTPBasicAuth(souvenir.username, souvenir.password),
+        url = 'http://' + IP + ':' + PORT + '/upload?title=' + title + '&collection=' + collection
+        post = requests.post(url, auth=HTTPBasicAuth(souvenir_user, souvenir_passwd),
                              files=files)
 
         if post.status_code == 201:
@@ -217,7 +230,7 @@ class RecordWindow(QMainWindow):
         self.duration.clear()
         self.submit_btn.setText('Record')
         os.remove(os.getcwd() + '/temp/' + title)
-        self.return_to_choice()
+        self.return_to_self()
 
     def record(self, file, secs):
 
@@ -255,7 +268,10 @@ class RecordWindow(QMainWindow):
         while not self.submit_btn.isChecked() or not audio_proc.is_alive():
             audio.stop(self.audio_title.text())
 
-    def return_to_choice(self):
+    def return_to_self(self):
+        souvenir.setCurrentWidget(self)
+
+    def back(self):
         souvenir.setCurrentWidget(choice)
 
 
@@ -305,11 +321,18 @@ class PlayWindow(QMainWindow):
         self.help_btn.clicked.connect(self.help)
         self.help_btn.setFocusPolicy(Qt.NoFocus)
 
+        self.back_btn = QPushButton(self)
+        self.back_btn.setText('Back')
+        self.back_btn.setFont(font)
+        self.back_btn.setGeometry(15, 520, 80, 30)
+        self.back_btn.clicked.connect(self.back)
+        self.back_btn.setFocusPolicy(Qt.NoFocus)
+
     def find_audio(self):
         title = self.audio_title.text()
         collection = self.collection.text()
 
-        url = 'http://0.0.0.0:19720/download?title=' + title + '&collection=' + collection
+        url = 'http://' + IP + ':' + PORT + '/download?title=' + title + '&collection=' + collection
 
 
     def help(self):
@@ -317,6 +340,9 @@ class PlayWindow(QMainWindow):
                                          'Enter an audio title and collection to search.' +
                                          'Then, press play, and if the audio is found, the audio ' +
                                          'will begin playing.')
+
+    def back(self):
+        souvenir.setCurrentWidget(choice)
 
 
 # Press the green button in the gutter to run the script.
