@@ -47,6 +47,7 @@ class LoginWindow(QMainWindow):
         submit_btn.setFont(font)
         submit_btn.setGeometry(225, 475, 150, 30)
         submit_btn.clicked.connect(self.check_pass)
+        submit_btn.setFocusPolicy(Qt.NoFocus)
 
     def check_pass(self):
 
@@ -56,6 +57,9 @@ class LoginWindow(QMainWindow):
             login_request = requests.get(url, auth=HTTPBasicAuth(self.user_label.text(),
                                                                  self.pass_label.text()))
 
+            souvenir.username = self.user_label.text()
+            souvenir.password = self.pass_label.text()
+
             if login_request.status_code != 200:
                 button = QMessageBox.warning(self, 'Invalid Login', 'Try again with different credentials')
                 self.user_label.clear()
@@ -64,7 +68,7 @@ class LoginWindow(QMainWindow):
                 self.switch_window()
 
         except requests.exceptions.ConnectionError:
-            button = QMessageBox.warning(self, 'Connection Failed', 'Could not find local souvenir server.')
+            button = QMessageBox.warning(self, 'Connection Failed', 'Could not find local Souvenir server.')
             self.user_label.clear()
             self.pass_label.clear()
 
@@ -89,19 +93,137 @@ class ChoiceWindow(QMainWindow):
 
         font = QFont("Helvetica", 15)
 
-        self.show()
+        self.pixmap = QPixmap('logo.png')
+        self.img_label = QLabel(self)
+        self.img_label.setPixmap(self.pixmap)
+        self.img_label.setGeometry(50, 80, 500, 300)
+
+        rec_btn = QPushButton(self)
+        rec_btn.setText('Record Audio')
+        rec_btn.setFont(font)
+        rec_btn.setGeometry(150, 400, 120, 30)
+        rec_btn.setFocusPolicy(Qt.NoFocus)
+        rec_btn.clicked.connect(self.rec_click)
+
+        play_btn = QPushButton(self)
+        play_btn.setText('Play Audio')
+        play_btn.setFont(font)
+        play_btn.setGeometry(330, 400, 120, 30)
+        play_btn.setFocusPolicy(Qt.NoFocus)
+        play_btn.clicked.connect(self.get_click)
+
+    def rec_click(self):
+        souvenir.setCurrentWidget(record)
+
+    def get_click(self):
+        souvenir.setCurrentWidget(play)
+
+
+class RecordWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle('Souvenir')
+        self.setMinimumSize(600, 600)
+        self.setMaximumSize(600, 600)
+
+        palette = QPalette()
+        palette.setColor(QPalette.Window, QColor(65, 179, 211))
+        palette.setColor(QPalette.WindowText, QColor(228, 288, 288))
+        palette.setColor(QPalette.Base, QColor(65, 179, 211))
+        palette.setColor(QPalette.PlaceholderText, QColor(228, 228, 228))
+        self.setPalette(palette)
+        self.setAutoFillBackground(True)
+
+        font = QFont("Helvetica", 15)
+
+        self.audio_title = QLineEdit(self)
+        self.audio_title.setPlaceholderText('Audio Title')
+        self.audio_title.setFont(font)
+        self.audio_title.setGeometry(150, 400, 300, 25)
+
+        self.collection = QLineEdit(self)
+        self.collection.setPlaceholderText('Collection')
+        self.collection.setFont(font)
+        self.collection.setGeometry(150, 440, 300, 25)
+
+        self.pixmap = QPixmap('logo.png')
+        self.img_label = QLabel(self)
+        self.img_label.setPixmap(self.pixmap)
+        self.img_label.setGeometry(50, 80, 500, 300)
+
+        self.submit_btn = QPushButton(self)
+        self.submit_btn.setText('Record')
+        self.submit_btn.setFont(font)
+        self.submit_btn.setGeometry(225, 475, 150, 30)
+        self.submit_btn.clicked.connect(self.rec_click)
+        self.submit_btn.setFocusPolicy(Qt.NoFocus)
+
+    def rec_click(self):
+
+        if self.audio_title.text() and self.collection.text():
+            self.submit_btn.setText('Stop')
+            self.record_audio
+        else:
+            button = QMessageBox.information(self, 'Audio Info', 'Enter a title and a collection to save audio.')
+
+    def record_audio(self):
+        title = self.audio_title.text()
+        collection = self.collection.text()
+
+        self.submit.btn.clicked.connect('rec_to_file')
+
+        # threading
+        # record audio to file
+
+        # params = {'title': title, 'collection': collection}
+        # post = requests.post('http://0.0.0.0:19720/upload', params=params,
+        #                      auth=HTTPBasicAuth(souvenir.username,
+        #                                         souvenir.password))
+
+        button = QMessageBox.information(self, 'Audio Uploaded!', 'Title: ', title, '\n',
+                                         'Collection: ', collection)
+
+        button.clicked.connect(self.return_to_choice)
+
+        def return_to_choice(self):
+            souvenir.setCurrentWidget(choice)
+
+
+class PlayWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle('Souvenir')
+        self.setMinimumSize(600, 600)
+        self.setMaximumSize(600, 600)
+
+        palette = QPalette()
+        palette.setColor(QPalette.Window, QColor(65, 179, 211))
+        palette.setColor(QPalette.WindowText, QColor(228, 288, 288))
+        palette.setColor(QPalette.Base, QColor(65, 179, 211))
+        palette.setColor(QPalette.PlaceholderText, QColor(228, 228, 228))
+        self.setPalette(palette)
+        self.setAutoFillBackground(True)
+
+        font = QFont("Helvetica", 15)
 
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     souvenir = QStackedWidget()
+    souvenir.setFocusPolicy(Qt.NoFocus)
 
     login = LoginWindow()
     souvenir.addWidget(login)
 
     choice = ChoiceWindow()
     souvenir.addWidget(choice)
+
+    record = RecordWindow()
+    souvenir.addWidget(record)
+
+    play = PlayWindow()
+    souvenir.addWidget(play)
 
     souvenir.setCurrentWidget(login)
     souvenir.show()
