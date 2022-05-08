@@ -7,7 +7,14 @@ from PyQt5.QtGui import *
 from requests.auth import HTTPBasicAuth
 import sys
 import pyaudio
+import wave
 import requests
+import multiprocessing
+
+CHUNK = 1024
+FORMAT = pyaudio.paInt16
+CHANNELS = 2
+RATE = 44100
 
 
 class LoginWindow(QMainWindow):
@@ -61,7 +68,8 @@ class LoginWindow(QMainWindow):
             souvenir.password = self.pass_label.text()
 
             if login_request.status_code != 200:
-                button = QMessageBox.warning(self, 'Invalid Login', 'Try again with different credentials')
+                button = QMessageBox.warning(self, 'Invalid Login', 'Invalid login. '
+                                                                    'Try again with different credentials')
                 self.user_label.clear()
                 self.pass_label.clear()
             else:
@@ -162,7 +170,7 @@ class RecordWindow(QMainWindow):
 
         if self.audio_title.text() and self.collection.text():
             self.submit_btn.setText('Stop')
-            self.record_audio
+            self.record_audio()
         else:
             button = QMessageBox.information(self, 'Audio Info', 'Enter a title and a collection to save audio.')
 
@@ -170,23 +178,26 @@ class RecordWindow(QMainWindow):
         title = self.audio_title.text()
         collection = self.collection.text()
 
-        self.submit.btn.clicked.connect('rec_to_file')
+        audioplayer = AudioRec()
+        title = self.audio_title.text()
+        self.submit_btn.clicked.connect(audioplayer.stop(title))
 
-        # threading
-        # record audio to file
+        rec_process = multiprocessing.Process(target=audioplayer.record())
+        rec_process.start()
 
         # params = {'title': title, 'collection': collection}
         # post = requests.post('http://0.0.0.0:19720/upload', params=params,
         #                      auth=HTTPBasicAuth(souvenir.username,
         #                                         souvenir.password))
 
+        self.submit_btn.setText('Record')
         button = QMessageBox.information(self, 'Audio Uploaded!', 'Title: ', title, '\n',
                                          'Collection: ', collection)
 
         button.clicked.connect(self.return_to_choice)
 
-        def return_to_choice(self):
-            souvenir.setCurrentWidget(choice)
+    def return_to_choice(self):
+        souvenir.setCurrentWidget(choice)
 
 
 class PlayWindow(QMainWindow):
@@ -205,6 +216,35 @@ class PlayWindow(QMainWindow):
         self.setAutoFillBackground(True)
 
         font = QFont("Helvetica", 15)
+
+
+class AudioRec:
+    def __init__(self):
+        self.p = pyaudio.PyAudio()
+
+        self.stream = self.p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
+
+        self.frames = []
+
+    def record(self):
+
+        while True:
+            data = self.stream.read(CHUNK)
+            self.frames.append(data)
+
+    def stop(self, filename):
+
+        sample_width = self.p.get_sample_size(FORMAT)
+        self.stream.stop_stream()
+        self.stream.close()
+        self.p.terminate()
+
+        wf = wave.open(filename, 'wb')
+        wf.setnchannels(CHANNELS)
+        wf.setsampwidth(sample_width)
+        wf.setframerate(RATE)
+        wf.writeframes(b''.join(self.frames))
+        wf.close()
 
 
 # Press the green button in the gutter to run the script.
