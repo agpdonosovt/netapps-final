@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from requests.auth import HTTPBasicAuth
+from io import BytesIO
 import sys
 import pyaudio
 import wave
@@ -31,12 +32,24 @@ class LoginWindow(QMainWindow):
         palette = QPalette()
         palette.setColor(QPalette.Window, QColor(65, 179, 211))
         palette.setColor(QPalette.WindowText, QColor(228, 288, 288))
-        palette.setColor(QPalette.Base, QColor(65, 179, 211))
-        palette.setColor(QPalette.PlaceholderText, QColor(228, 228, 228))
+        palette.setColor(QPalette.Base, QColor(228, 228, 228))
+        palette.setColor(QPalette.PlaceholderText, QColor(132, 199, 220))
+        palette.setColor(QPalette.Text, QColor(65, 179, 211))
+        palette.setColor(QPalette.ButtonText, QColor(65, 179, 211))
         self.setPalette(palette)
         self.setAutoFillBackground(True)
 
         font = QFont("Helvetica", 15)
+
+        self.setStyleSheet("QLineEdit {"
+                           "border : 5px;"
+                           "border-radius : 10;"
+                           "color: rgb(65, 179, 211);"
+                           "}"
+                           "QPushButton {"
+                           "color: rgb(65, 179, 211);"
+                           "}"
+                           )
 
         self.user_label = QLineEdit(self)
         self.user_label.setPlaceholderText('Username')
@@ -105,6 +118,16 @@ class ChoiceWindow(QMainWindow):
         self.setPalette(palette)
         self.setAutoFillBackground(True)
 
+        self.setStyleSheet("QLineEdit {"
+                           "border : 5px;"
+                           "border-radius : 10;"
+                           "color: rgb(65, 179, 211);"
+                           "}"
+                           "QPushButton {"
+                           "color: rgb(65, 179, 211);"
+                           "}"
+                           )
+
         font = QFont("Helvetica", 15)
 
         self.pixmap = QPixmap('logo.png')
@@ -147,6 +170,16 @@ class RecordWindow(QMainWindow):
         palette.setColor(QPalette.PlaceholderText, QColor(228, 228, 228))
         self.setPalette(palette)
         self.setAutoFillBackground(True)
+
+        self.setStyleSheet("QLineEdit {"
+                           "border : 5px;"
+                           "border-radius : 10;"
+                           "color: rgb(65, 179, 211);"
+                           "}"
+                           "QPushButton {"
+                           "color: rgb(65, 179, 211);"
+                           "}"
+                           )
 
         font = QFont("Helvetica", 15)
 
@@ -215,21 +248,26 @@ class RecordWindow(QMainWindow):
 
         self.submit_btn.setText('Stopped')
 
-        files = {'file': open(os.getcwd() + '/temp/' + title, 'rb')}
-        url = 'http://' + IP + ':' + PORT + '/upload?title=' + title + '&collection=' + collection
-        post = requests.post(url, auth=HTTPBasicAuth(souvenir_user, souvenir_passwd),
-                             files=files)
+        try:
+            files = {'file': open(os.getcwd() + '/temp/' + title, 'rb')}
+            url = 'http://' + IP + ':' + PORT + '/upload?title=' + title + '&collection=' + collection
+            post = requests.post(url, auth=HTTPBasicAuth(souvenir_user, souvenir_passwd),
+                                 files=files)
 
-        if post.status_code == 201:
-            button = QMessageBox.information(self, 'Success', 'Uploaded audio to server!')
-        else:
-            button = QMessageBox.warning(self, 'Failure', 'Could not upload file to server.')
+            if post.status_code == 201:
+                button = QMessageBox.information(self, 'Success', 'Uploaded audio to server!')
+            else:
+                button = QMessageBox.warning(self, 'Failure', 'Could not upload file to server.')
+
+            os.remove(os.getcwd() + '/temp/' + title)
+
+        except requests.exceptions.ConnectionError:
+            button = QMessageBox.warning(self, 'Connection Failed', 'Could not find local Souvenir server.')
 
         self.audio_title.clear()
         self.collection.clear()
         self.duration.clear()
         self.submit_btn.setText('Record')
-        os.remove(os.getcwd() + '/temp/' + title)
         self.return_to_self()
 
     def record(self, file, secs):
@@ -290,6 +328,16 @@ class PlayWindow(QMainWindow):
         self.setPalette(palette)
         self.setAutoFillBackground(True)
 
+        self.setStyleSheet("QLineEdit {"
+                           "border : 5px;"
+                           "border-radius : 10;"
+                           "color: rgb(65, 179, 211);"
+                           "}"
+                           "QPushButton {"
+                           "color: rgb(65, 179, 211);"
+                           "}"
+                           )
+
         font = QFont("Helvetica", 15)
 
         self.audio_title = QLineEdit(self)
@@ -311,7 +359,7 @@ class PlayWindow(QMainWindow):
         self.submit_btn.setText('Play')
         self.submit_btn.setFont(font)
         self.submit_btn.setGeometry(225, 475, 150, 30)
-        #self.submit_btn.clicked.connect(self.find_audio())
+        self.submit_btn.clicked.connect(self.find_audio)  #
         self.submit_btn.setFocusPolicy(Qt.NoFocus)
 
         self.help_btn = QPushButton(self)
@@ -332,8 +380,56 @@ class PlayWindow(QMainWindow):
         title = self.audio_title.text()
         collection = self.collection.text()
 
-        url = 'http://' + IP + ':' + PORT + '/download?title=' + title + '&collection=' + collection
+        try:
+            url = 'http://' + IP + ':' + PORT + '/download?title=' + title + '&collection=' + collection
+            result = requests.get(url, auth=HTTPBasicAuth(souvenir_user, souvenir_passwd))
 
+            if result.status_code != 404:
+
+                audio_file = BytesIO(result.content)
+
+                with open(title, "wb") as f:
+                    f.write(audio_file.getbuffer())
+
+                os.rename(title, os.getcwd() + '/temp/' + title + '.wav')
+
+                self.play_audio(os.getcwd() + '/temp/' + title + '.wav')
+
+                os.remove(os.getcwd() + '/temp/' + title + '.wav')
+
+                self.audio_title.clear()
+                self.collection.clear()
+                self.return_to_self()
+
+            else:
+                button = QMessageBox.warning(self, 'File not Found', 'The requested file was not found on the server.')
+
+        except requests.exceptions.ConnectionError:
+            button = QMessageBox.warning(self, 'Connection Failed', 'Could not find local Souvenir server.')
+            self.audio_title.clear()
+            self.collection.clear()
+
+    def play_audio(self, title):
+
+        self.p = pyaudio.PyAudio()
+
+        self.wf = wave.open(title, 'rb')
+
+        self.stream = self.p.open(format=self.p.get_format_from_width(self.wf.getsampwidth()),
+                                  channels=self.wf.getnchannels(), rate=self.wf.getframerate(),
+                                  output=True)
+
+        data = self.wf.readframes(CHUNK)
+        while data != '':
+            self.stream.write(data)
+            data = self.wf.readframes(CHUNK)
+            if data == b'':
+                break
+
+        self.stream.close()
+        self.p.terminate()
+
+        button = QMessageBox.warning(self, 'Audio', 'Finished Playing Audio')
 
     def help(self):
         button = QMessageBox.information(self, 'Audio Info',
@@ -343,6 +439,9 @@ class PlayWindow(QMainWindow):
 
     def back(self):
         souvenir.setCurrentWidget(choice)
+
+    def return_to_self(self):
+        souvenir.setCurrentWidget(self)
 
 
 # Press the green button in the gutter to run the script.

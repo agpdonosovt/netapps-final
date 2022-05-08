@@ -4,7 +4,6 @@
 from pymongo import MongoClient
 from flask import Flask, request, Response, send_file
 from flask_httpauth import HTTPBasicAuth
-import gridfs
 import os
 
 # Basic Flask, HTTPAuth, MongoDB setup
@@ -45,15 +44,16 @@ def save_file():
 @app.route('/download')
 @auth.login_required()
 def download():
-    return False
 
+    filename = request.args.get('title') + '.wav'
+    collection = request.args.get('collection')
+    save_filename = collection + '_' + filename
+    save_col = database[collection]
 
-@app.route('/list', methods=['GET'])
-@auth.login_required()
-def retrieve_file():
-
-    filelist = []
-    return filelist
+    if save_col.find_one({'filename': filename, 'save_name': save_filename}):
+        return send_file(os.getcwd() + '/audios/' + save_filename, as_attachment=True)
+    else:
+        return Response('File not found\n', status=404, mimetype='text')
 
 
 # Verify password through mongodb
